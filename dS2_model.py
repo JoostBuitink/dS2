@@ -304,7 +304,7 @@ class dS2:
         self.Qrout = {}
         for outlet in allOutlets:
             self.Qrout[str(outlet)] = np.repeat(0., self.shape[0] +
-                                      int(np.nanmax(self.dist1D) * self.t_lag))
+                                      int(np.nanmax(self.dist1D) * self.tau))
 
         # Find the filenames of the memmap files and sort
         files = glob.glob("{}/{}*.dat".format(self.outdir, "Qsim"))
