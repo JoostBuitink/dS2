@@ -317,7 +317,8 @@ class dS2:
         self.size = np.loadtxt("{}/{}".format(self.indir, fname_size_map), skiprows=0)
         self.size[self.size==-9999] = np.nan
         self.size = self.size[~np.isnan(self.size)]
-        total_size = sum(self.size)
+        # total_size = sum(self.size)
+        mean_size = np.mean(self.size)
 
         # Loop through all files and import information into memory
         for file in files:
@@ -328,13 +329,11 @@ class dS2:
             shape = (stop-start, self.shape[1])
             # Read the memmap data
             data = np.memmap(file, dtype=self.dtype, mode="r", shape = shape)
-
-            self.temp_data = data.copy()
-
-            data = (data * self.size) / total_size
+            # Correct data for the pixel size
+            data = (data * self.size) / mean_size
 
             # Rout the chunk of discharge data
-            Qtmp = fR._multiOutlet_routing_noDIV(self, data)
+            Qtmp = fR.multiOutlet_routing(self, data)
 
             # Write temporary values to the total dictionary
             for outlet in Qtmp:
