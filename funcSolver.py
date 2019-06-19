@@ -168,3 +168,54 @@ def rk_cashkarp(P, ET, Q, alpha, beta, gamma, dt=1):
 
     return fifth_sol, fourth_sol
 
+def calc_storage(Q, alpha, beta, gamma, lb_correction = 0.1):
+    ''' Calcate the storage by numerically integrating 1/gQ over [0, Q], using
+    scipy.integrate.quad. This function requires a lower and upper boundary
+    for the integration. Since a value of 0 for the lower boundary will result
+    in an error (when gamma != 0), so a value close to zero is preferred. In
+    this case, the lower boundary is set to gamma * lb_correction. The
+    motivation behind this lower limit is that gamma relates to where the
+    downwards curvature in the gQ function starts, as lower values of Q will
+    give unstable results. The uppoer limit of integrateion is the discharge
+    value at each timestep.
+    '''
+
+    import scipy.integrate as integrate
+
+    # Define the function to integrate
+    def int_gQdQ(Q, alpha, beta, gamma):
+        gQ = gQ_fun(Q, alpha, beta, gamma)
+        int_gQ = 1 / gQ
+        return int_gQ
+
+    def set_par(param, idx):
+        try:
+            out = param[idx]
+        except:
+            out = param
+        return out
+
+    # Prepare an empty array to store storage values in
+    storage = np.zeros(Q.shape)
+
+    # If Q is only a single timeseries
+    if len(Q.shape) == 1:
+        # Loop through each Q value and calculate the storage
+        for i in range(len(Q)):
+            storage[i] = integrate.quad(int_gQdQ, abs(gamma) * lb_correction, Q[i],
+                   args=(alpha, beta, gamma))[0]
+    # If Q is a 2D array of discharge
+    elif len(Q.shape) == 2:
+        for i in range(len(Q)):
+            for j in range(len(Q[i])):
+                # Get parameter values
+                tmp_alpha = set_par(alpha, j)
+                tmp_beta = set_par(beta, j)
+                tmp_gamma = set_par(gamma, j)
+
+                storage[i][j] = integrate.quad(int_gQdQ, abs(tmp_gamma) * lb_correction, Q[i][j],
+                       args=(tmp_alpha, tmp_beta, tmp_gamma))[0]
+    else:
+        raise ValueError("Invalid shape Q")
+
+    return storage
