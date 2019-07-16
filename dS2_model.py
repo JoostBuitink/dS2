@@ -344,3 +344,242 @@ class dS2:
             # Close and delete the memmap file
             del data
             os.remove(file)
+
+
+class dS2_multi_core:
+
+
+    def model_setup_class(self, input_class):
+        ''' Function to read the settings class, read the required input files,
+        set the parameter values and set the model options. '''
+        # print(">>> Preparing input...")
+        import copy as cp
+        settings = cp.deepcopy(input_class)
+        rI.read_class(self, settings)
+
+    def change_param(self, par_name, value):
+        ''' Use this function to change parameter values, as some parameters
+        are corrected to different units to be used in the model. This function
+        ensures that the parameter will have the correct units after changing
+        the value. '''
+        fP.set_parameter(self, par_name, value)
+
+    def multi_init(self, ncpu):
+        self.ncpu = ncpu
+
+    def multi_read_memmap(self, filename, chunk_start, chunk_end, ncpu, ncpu_idx):
+        ''' Function to read part of memmap, and slice it to the correct size '''
+        data = rI.read_memmap(self, fileName=filename)[chunk_start:chunk_end]
+        data = np.array_split(data, ncpu, axis=1)[ncpu_idx]
+        return data
+
+    def multi_read_chunk(self, chunk_start, offset, i, ncpu, ncpu_idx):
+        ''' Function to read part of the forcing data (in memmap format) and
+        calculate all other forcing related variables, to reduce computational
+        time. '''
+        # chunk_start = chunk_end
+        chunk_end = min((self.tsteps + offset) - chunk_start, self.chunk_size) + i + offset
+
+        # Read precipitation data
+        self.P = self.multi_read_memmap(self.P_file, chunk_start, chunk_end, ncpu, ncpu_idx)
+        self.ET_CHUNK = self.multi_read_memmap(self.ET_file, chunk_start, chunk_end, ncpu, ncpu_idx)
+        # Read chunks of the required input data for snow, set Rs to zero if not present
+        if self.SnowFLAG:
+            T  = self.multi_read_memmap(self.T_file, chunk_start, chunk_end, ncpu, ncpu_idx)
+            try:
+                Rs = self.multi_read_memmap(self.Rs_file, chunk_start, chunk_end, ncpu, ncpu_idx)
+            except FileNotFoundError:
+                Rs = 0
+            self.Prain_CHUNK = np.where(T > self.T0, self.P, 0)
+            self.Psnow_CHUNK = np.where(T <= self.T0, self.P, 0)
+            self.Smelt_POT = fF.snowmelt_potential(T = T, Rg = Rs, T0 = self.T0,
+                                              ddf = self.ddf, fact = self.rdf)
+        else:
+            self.Prain_CHUNK = self.P
+            self.Psnow_CHUNK = np.zeros(self.P.shape, dtype=self.dtype)
+        return chunk_end
+
+    def __write_tmp_output(self, var, chunk_start, chunk_end):
+        ''' Write temporary output files, as result of the chunking
+        functionality. This will only be done for the variables that are
+        demanded as output. '''
+        if var == "WatBal":
+            P_sum = np.mean(self.P)
+            ET_sum = np.mean(self.ETpot) * self.eps
+            Qsim_sum = np.mean(self.Qsim)
+            #TODO: WatBal does not include storage
+            self.WatBal = self.WatBal.append(pd.Series([P_sum, ET_sum, Qsim_sum],
+                                                       index=self.WatBal.columns),
+                                            ignore_index=True)
+        else:
+            fileName = "{}/{}".format(self.cpu_outdir, var)
+            dat = getattr(self, var)
+            rO.write_memmap(fileName, dat, chunk_start, chunk_end)
+
+    def run_multicores(self, ncpu_idx, progress = False):
+
+        ncpu_idx = ncpu_idx[0]
+
+        self.cpu_outdir = "{}/cpu_{}".format(self.outdir, ncpu_idx)
+        # Create directory if not yet exits, else clear contents in directory
+        if not os.path.isdir(self.cpu_outdir):
+            os.mkdir(self.cpu_outdir)
+        else:
+            for file_name in os.listdir(self.cpu_outdir):
+                os.remove("{}/{}".format(self.cpu_outdir, file_name))
+
+        self.generate_runoff(ncpu_idx, progress=progress)
+
+
+    def generate_runoff(self, ncpu_idx, progress=False):
+        '''Loops through all the time steps to calculate the discharge. '''
+        # print(">>> Generating discharge...")
+
+
+        #======================================================================
+        # Find forcing index corresponding to starting date
+        #======================================================================
+        offset = int(np.where(self.data_period==self.sim_period[0])[0])
+        if offset + len(self.sim_period) > len(self.data_period):
+            raise ValueError("Simulation period is too long")
+
+        #======================================================================
+        # Read first input chunk
+        #======================================================================
+        chunk_start = 0 + offset
+        chunk_end = self.multi_read_chunk(chunk_start = chunk_start, offset = offset, i = 0,
+                                          ncpu = self.ncpu, ncpu_idx = ncpu_idx)
+
+        self.full_shape = self.shape
+        self.shape = (self.shape[0], self.P.shape[1])
+
+        # reshape the parameters (if only a single value), to allow for slicing
+        if self.evap_reduction:
+            self.reduction_idx = []
+            for par in ["alpha", "beta", "gamma"]:
+                tmp_par = getattr(self, par)
+
+                # test whether parameters are an array or single value
+                if type(tmp_par) != np.ndarray:
+                    # if not an array, reshape the parameter to the correct shape
+                    tmp_par = np.repeat(tmp_par, self.shape[1])
+                    setattr(self, par, tmp_par)
+
+        #======================================================================
+        # Prepare output files
+        #======================================================================
+        allVars = ["WatBal", "Qsim", "Smelt", "Sstore"]
+        outputVars = []
+        for var in allVars:
+            if getattr(self, "{}_flag".format(var)):
+                if (var == "Smelt" or var == "Sstore" and self.SnowFLAG):
+                    outputVars += [var]
+                elif (var != "Smelt" and var != "Sstore"):
+                    outputVars += [var]
+                if var != "WatBal":
+                    setattr(self, var, np.zeros(self.P.shape, dtype = self.dtype))
+                else:
+                    self.WatBal = pd.DataFrame(columns = ("P", "ET", "Qsim"))
+                    setattr(self, "ETpot", np.zeros(self.P.shape, dtype = self.dtype))
+        self.outputVars = outputVars
+
+        #======================================================================
+        # Initialize values
+        #======================================================================
+        # Set initial discharge
+        Qsim         = np.broadcast_to(self.init_Qsim, (self.shape[1],))
+        # Set initial snow storage
+        if self.SnowFLAG:
+            Sstore = self.init_Sstore
+
+        # Set the for loop to be a tqdm loop if progress bar is required
+        if progress == True:
+            sim_length = trange(0, self.tsteps)
+        else:
+            sim_length = range(0, self.tsteps)
+
+        # Chunk indexing variable, set to -1 so it is zero in the first loop
+        j = -1
+        # Variable to store the number of internal timestep per timestep
+        self._num_dt = []
+
+        for i in sim_length:
+            # Set index for the forcing data (since it is chunked)
+            j += 1
+            #==================================================================
+            # Output the results if required
+            #==================================================================
+            if i%self.chunk_size == 0:
+                if i != 0:
+                    for var in outputVars:
+                        self.__write_tmp_output(var, chunk_start, chunk_end)
+
+                    #==========================================================
+                    # Read new chunk of forcing data
+                    #==========================================================
+                    j = 0
+                    chunk_start = chunk_end
+                    chunk_end = self.multi_read_chunk(chunk_start = chunk_start, offset = offset, i = i,
+                                                      ncpu = self.ncpu, ncpu_idx = ncpu_idx)
+                    #==========================================================
+                    # Create new empty arrays for the output variables
+                    #==========================================================
+                    for var in outputVars:
+                        setattr(self, var, np.zeros(self.P.shape, dtype = self.dtype))
+
+            #==================================================================
+            # Run the model
+            #==================================================================
+            # Solid and liquid precipitation
+            Prain = self.Prain_CHUNK[j]
+            Psnow = self.Psnow_CHUNK[j]
+
+            # Evaporation
+            ETpot = self.ET_CHUNK[j]
+
+            # Calculate the snowmelt and update snow storage
+            if self.SnowFLAG:
+                Smelt_mmdt = np.minimum(self.Smelt_POT[j] * self.dt, Sstore)
+                Sstore = Sstore + self.dt * Psnow - Smelt_mmdt
+                Smelt = Smelt_mmdt / self.dt
+            else:
+                Smelt = 0
+
+            # Calculate the discharge generated in each cell
+            Qnew, num_dt = fS.flexible_RK4(P = Prain + Smelt, ET = ETpot * self.eps, Q = Qsim,
+                                alpha = self.alpha, beta = self.beta, gamma = self.gamma,
+                                dt=self.dt, LB=self.LB,
+                                gQ_mdiff=2.0, dt_reduction=.15, min_dt=10, max_dt=50)
+
+            # Perform evaporation reduction (set ET = 0 if Q < Qt)
+            if self.evap_reduction == True:
+                Qnew, idx = fF.evaporation_reduction(QwithET=Qnew, Q_init=Qsim, P=Prain + Smelt,
+                                                     alpha=self.alpha, beta=self.beta, gamma=self.gamma,
+                                                     Q_threshold=self.Qt, LB=self.LB, dt = self.dt)
+                self.reduction_idx.append(idx)
+
+            Qsim = Qnew
+            self._num_dt.append(num_dt)
+
+            #==================================================================
+            # Set the value to a class variable
+            #==================================================================
+            for var in outputVars:
+                if var == "WatBal":
+                    getattr(self, "ETpot")[j] = locals()["ETpot"]
+                else:
+                    getattr(self, var)[j] = locals()[var]
+        #======================================================================
+        # Save the output variables to a file
+        #======================================================================
+        for var in outputVars:
+            self.__write_tmp_output(var, chunk_start, chunk_end)
+
+        #======================================================================
+        # Create correct water balance file
+        #======================================================================
+        if self.WatBal_flag:
+            self.WatBal.loc["total"] = self.WatBal.sum()
+            diff = self.WatBal.loc["total","P"] - self.WatBal.loc["total","ET"] - self.WatBal.loc["total","Qsim"]
+            self.WatBal.loc["total","diff"] = diff
+            self.WatBal.to_csv("{}/WaterBalance.csv".format(self.cpu_outdir))
