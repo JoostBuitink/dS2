@@ -36,8 +36,7 @@ def set_parameter(self, name, value):
                                  + timedelta(hours=self.dt),
                       step = timedelta(hours=self.dt)).astype(datetime))
         self.tsteps = len(self.sim_period)
-        self.shape[0] = self.tsteps
-        # self.shape = (self.tsteps, len(self.Lat))
+        self.shape = (self.tsteps, self.shape[1])
     # Update the end of the simulation
     elif name == "sim_end":
         self.sim_period = pd.DatetimeIndex(
@@ -45,8 +44,8 @@ def set_parameter(self, name, value):
                       stop = datetime(*value),
                       step = timedelta(hours=self.dt)).astype(datetime))
         self.tsteps = len(self.sim_period)
-        self.shape[0] = self.tsteps
-        # self.shape = (self.tsteps, len(self.Lat))
+        self.shape = (self.tsteps, self.shape[1])
+
     # Update the intinal conditions
     elif name == "Sstore_init":
         self.init_Sstore = value
