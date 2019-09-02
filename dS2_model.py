@@ -250,7 +250,7 @@ class dS2:
                 for f in glob.glob("{}/{}*.dat".format(self.outdir, var)) :
                     os.remove(f)
 
-    def routing(self):
+    def routing(self, main_ID=1.0, delete=True):
         '''Transports water from each pixel to the outlet(s), applying a time
         lag based on the distance of each pixel to the outlet(s). '''
         print(">>> Routing...")
@@ -281,7 +281,7 @@ class dS2:
             data = np.memmap(file, dtype=self.dtype, mode="r", shape = shape)
 
             # Rout the chunk of discharge data
-            Qtmp = fR.multiOutlet_routing(self, data)
+            Qtmp = fR.multiOutlet_routing(self, data, main_ID)
 
             # Write temporary values to the total dictionary
             for outlet in Qtmp:
@@ -291,9 +291,10 @@ class dS2:
 
             # Close and delete the memmap file
             del data
-            os.remove(file)
+            if delete:
+                os.remove(file)
 
-    def _routing_corrected_mm(self, fname_size_map):
+    def _routing_corrected_mm(self, fname_size_map, main_ID=1.0):
         ''' Same as normal routing function, but correts for the size of the
         pixels. USE ONLY WHEN PIXELS DO NOT HAVE A UNIFORM SIZE'''
         print(">>> Routing...")
@@ -333,7 +334,7 @@ class dS2:
             data = (data * self.size) / mean_size
 
             # Rout the chunk of discharge data
-            Qtmp = fR.multiOutlet_routing(self, data)
+            Qtmp = fR.multiOutlet_routing(self, data, main_ID)
 
             # Write temporary values to the total dictionary
             for outlet in Qtmp:

@@ -82,7 +82,7 @@ def subcatch_to_outlet(Qsim, dist1D, outletLoc, catchLoc, t_lag):
 
     return Qrout
 
-def through_allOutlets(outletINFO, Qrouted, catchLoc, t_lag):
+def through_allOutlets(outletINFO, Qrouted, catchLoc, t_lag, main_ID=1.0):
     """
     Return the routed discharge per subbasin, taking a timelag into account.
     All values should be in mm/timestep
@@ -146,7 +146,7 @@ def through_allOutlets(outletINFO, Qrouted, catchLoc, t_lag):
     # Loop through all outlets
     for outletID in outletINFO:
         # Exclude the main outlet
-        if outletID != "1.0":
+        if outletID != str(main_ID):
             # Get the ID of the downstream catchment (and thus outlet)
             dwnID = outletINFO[outletID][0]
             values = Qrouted[outletID]
@@ -169,7 +169,7 @@ def through_allOutlets(outletINFO, Qrouted, catchLoc, t_lag):
 
     return Qtotal
 
-def multiOutlet_routing(self, Qsim):
+def multiOutlet_routing(self, Qsim, main_ID=1.0):
     """
     Returns the routed discharge for each individual outlet. This function is
     a wrapper for three other functions: subcatch_to_outlet, get_outletINFO,
@@ -206,7 +206,8 @@ def multiOutlet_routing(self, Qsim):
     Qmulti = through_allOutlets(outletINFO=self.outletInfo,
                                 Qrouted=Qrouted,
                                 catchLoc=self.catchLoc,
-                                t_lag=self.tau)
+                                t_lag=self.tau,
+                                main_ID=main_ID)
 
 
     return Qmulti
