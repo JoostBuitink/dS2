@@ -176,7 +176,7 @@ def calc_storage(Q, alpha, beta, gamma, lb_correction = 0.1):
     this case, the lower boundary is set to gamma * lb_correction. The
     motivation behind this lower limit is that gamma relates to where the
     downwards curvature in the gQ function starts, as lower values of Q will
-    give unstable results. The uppoer limit of integrateion is the discharge
+    give unstable results. The upper limit of integration is the discharge
     value at each timestep.
     '''
 
@@ -195,15 +195,26 @@ def calc_storage(Q, alpha, beta, gamma, lb_correction = 0.1):
             out = param
         return out
 
+    def int_gQdQ_nogamma(Q, alpha, beta):
+        if beta != 1.0:
+            S = (1/np.exp(alpha)) * (1/(1-beta)) * Q **(1-beta)
+        elif beta == 1.0:
+            S = (1/np.exp(alpha)) * np.log(Q)
+        return S
+
     # Prepare an empty array to store storage values in
     storage = np.zeros(Q.shape)
 
     # If Q is only a single timeseries
     if len(Q.shape) == 1:
+        if gamma == 0:
+            for i in range(len(Q)):
+                storage[i] = int_gQdQ_nogamma(Q[i], alpha = alpha, beta = beta)
         # Loop through each Q value and calculate the storage
-        for i in range(len(Q)):
-            storage[i] = integrate.quad(int_gQdQ, abs(gamma) * lb_correction, Q[i],
-                   args=(alpha, beta, gamma))[0]
+        else:
+            for i in range(len(Q)):
+                storage[i] = integrate.quad(int_gQdQ, abs(gamma) * lb_correction, Q[i],
+                       args=(alpha, beta, gamma))[0]
     # If Q is a 2D array of discharge
     elif len(Q.shape) == 2:
         for i in range(len(Q)):
