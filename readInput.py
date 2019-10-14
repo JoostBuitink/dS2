@@ -2,7 +2,7 @@ from datetime import datetime, timedelta
 import numpy as np
 import pandas as pd
 import xarray as xr
-import pickle
+import pickle, os
 
 def readMap(fileName, flat = False):
     """ Read 2D map, stored as an ASCII file, without any headers. Set flat to
@@ -48,6 +48,7 @@ def read_class(self, settings):
     # =========================================================================
     self.indir          = settings.input_dir
     self.outdir         = settings.output_dir
+    if not os.path.exists(self.outdir): os.mkdir(self.outdir)
 
     # =========================================================================
     # Catchment information

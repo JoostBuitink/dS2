@@ -75,7 +75,7 @@ def subcatch_to_outlet(Qsim, dist1D, outletLoc, catchLoc, t_lag):
             ind = ind[0]
             # Extract simulated values and the corresponding timelag
             values = Qsim[:,ind]
-            tmplag = int(dist1D[ind] * t_lag) - baseline_dist
+            tmplag = max(int(dist1D[ind] * t_lag) - baseline_dist, 0)
 
             # Shift the simulated discharge with a timelag
             Qrout[str(outlet)][int(tmplag):int(tmplag)+len(values)] += values
