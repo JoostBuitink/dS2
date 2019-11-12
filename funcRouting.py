@@ -82,7 +82,7 @@ def subcatch_to_outlet(Qsim, dist1D, outletLoc, catchLoc, t_lag):
 
     return Qrout
 
-def through_allOutlets(outletINFO, Qrouted, catchLoc, t_lag, main_ID=1.0):
+def through_allOutlets(self, outletINFO, Qrouted, catchLoc, t_lag, main_ID=1.0, trackwater=False):
     """
     Return the routed discharge per subbasin, taking a timelag into account.
     All values should be in mm/timestep
@@ -158,18 +158,27 @@ def through_allOutlets(outletINFO, Qrouted, catchLoc, t_lag, main_ID=1.0):
             while dwnID != "nan":
                 # Add the flow of the outletID to the downstream outlet
                 Qtotal[dwnID][delay:delay+len(values)] += values
+                
+                if dwnID == str(main_ID) and trackwater:
+                    self.Qorigin_tmp[outletID][delay:delay+len(values)] = values
+                    
                 # Keep track of how many times this addition has taken place
                 count[dwnID] += len(catchLoc[outletID])
                 # Get the delay to the downstream outlet and set the downstreamID
                 # to the next downstream outlet
                 delay += int(outletINFO[dwnID][1] * t_lag)
                 dwnID = outletINFO[dwnID][0]
+        else:
+            if trackwater:
+                values = Qrouted[outletID]
+                delay = 0
+                self.Qorigin_tmp[outletID][delay:delay+len(values)] = values
 
     Qtotal = {x: Qtotal[x]/count[x] for x in Qtotal}
-
+    
     return Qtotal
 
-def multiOutlet_routing(self, Qsim, main_ID=1.0):
+def multiOutlet_routing(self, Qsim, main_ID=1.0, trackwater=False):
     """
     Returns the routed discharge for each individual outlet. This function is
     a wrapper for three other functions: subcatch_to_outlet, get_outletINFO,
@@ -203,11 +212,12 @@ def multiOutlet_routing(self, Qsim, main_ID=1.0):
                                  catchLoc=self.catchLoc,
                                  t_lag=self.tau)
 
-    Qmulti = through_allOutlets(outletINFO=self.outletInfo,
+    Qmulti = through_allOutlets(self, outletINFO=self.outletInfo,
                                 Qrouted=Qrouted,
                                 catchLoc=self.catchLoc,
                                 t_lag=self.tau,
-                                main_ID=main_ID)
+                                main_ID=main_ID,
+                                trackwater=trackwater)
 
 
     return Qmulti

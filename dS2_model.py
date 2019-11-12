@@ -249,8 +249,8 @@ class dS2:
                 # Remove the .dat files
                 for f in glob.glob("{}/{}*.dat".format(self.outdir, var)) :
                     os.remove(f)
-
-    def routing(self, main_ID=1.0, delete=True):
+                
+    def routing(self, main_ID=1.0, delete=True, trackwater=False):
         '''Transports water from each pixel to the outlet(s), applying a time
         lag based on the distance of each pixel to the outlet(s). '''
         print(">>> Routing...")
@@ -262,6 +262,12 @@ class dS2:
         for outlet in allOutlets:
             self.Qrout[str(outlet)] = np.repeat(0., self.shape[0] +
                                       int(np.nanmax(self.dist1D) * self.tau))
+        if trackwater:
+            # Create empty dataframe to store the routed water per timestep per basin in
+            self.Qorigin = pd.DataFrame(0,
+                                        columns=np.array(allOutlets).astype(str), 
+                                        index=range(len(np.repeat(0., self.shape[0] +
+                                                    int(np.nanmax(self.dist1D) * self.tau * 2)))))
 
         # Find the filenames of the memmap files and sort
         files = glob.glob("{}/{}*.dat".format(self.outdir, "Qsim"))
@@ -280,9 +286,21 @@ class dS2:
             # Read the memmap data
             data = np.memmap(file, dtype=self.dtype, mode="r", shape = shape)
 
-            # Rout the chunk of discharge data
-            Qtmp = fR.multiOutlet_routing(self, data, main_ID)
+            if trackwater:
+                # Create temporary dataframe, used in mutliOutlet_routing()
+                self.Qorigin_tmp = pd.DataFrame(0,
+                    columns=np.array(allOutlets).astype(str), 
+                                        index=range(len(np.repeat(0., shape[0] +
+                                        int(np.nanmax(self.dist1D) * self.tau * 2)))))
 
+            # Rout the chunk of discharge data
+            Qtmp = fR.multiOutlet_routing(self, data, main_ID, trackwater)
+
+            if trackwater:
+                # Add values to the complete Qorigin dataframe
+                self.Qorigin[start:start+len(self.Qorigin_tmp)] += \
+                    self.Qorigin_tmp[:min(self.tsteps, start+len(self.Qorigin_tmp))].values
+            
             # Write temporary values to the total dictionary
             for outlet in Qtmp:
                 # Slice the trailing zeroes, to prevent replacing errors
@@ -290,10 +308,17 @@ class dS2:
                 self.Qrout[str(outlet)][start:start+len(val)] += val
 
             # Close and delete the memmap file
-            del data
+            del data, self.Qorigin_tmp
             if delete:
-                os.remove(file)
-
+                os.remove(file)                
+            
+        if trackwater:
+            # Slice to correct length, and correct for the number of pixels
+            self.Qorigin = self.Qorigin[:self.tsteps]
+            self.Qorigin /= len(self.catchment[~np.isnan(self.catchment)])
+            
+            
+            
     def _routing_corrected_mm(self, fname_size_map, main_ID=1.0):
         ''' Same as normal routing function, but correts for the size of the
         pixels. USE ONLY WHEN PIXELS DO NOT HAVE A UNIFORM SIZE'''
