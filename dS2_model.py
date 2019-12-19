@@ -300,6 +300,7 @@ class dS2:
                 # Add values to the complete Qorigin dataframe
                 self.Qorigin[start:start+len(self.Qorigin_tmp)] += \
                     self.Qorigin_tmp[:min(self.tsteps, start+len(self.Qorigin_tmp))].values
+                del self.Qorigin_tmp
             
             # Write temporary values to the total dictionary
             for outlet in Qtmp:
@@ -308,14 +309,19 @@ class dS2:
                 self.Qrout[str(outlet)][start:start+len(val)] += val
 
             # Close and delete the memmap file
-            del data, self.Qorigin_tmp
+            del data
             if delete:
                 os.remove(file)                
-            
+        
+        # Correct the dictionary to the total simulation length
+        for key in self.Qrout.keys():
+            self.Qrout[key] = self.Qrout[key][:self.tsteps]
+        
         if trackwater:
             # Slice to correct length, and correct for the number of pixels
             self.Qorigin = self.Qorigin[:self.tsteps]
             self.Qorigin /= len(self.catchment[~np.isnan(self.catchment)])
+            self.Qorigin.index = pd.DatetimeIndex(self.sim_period)
             
             
             
