@@ -82,15 +82,20 @@ def read_class(self, settings):
     # Initial conditions
     # =========================================================================
     for var in ["Qsim", "Sstore"]:
-        # Try to read initial storage (first as value, than as map)
+        # Try to read initial storage (first as value, than as map, than as NetCDF)
         try:
             dat         = float(getattr(settings, "init_{}".format(var)))
             setattr(self, "init_{}".format(var), dat)
         except:
-            fileLoc     = self.indir + getattr(settings, var)
-            dat         = readNetCDF(fileLoc).loc[self.sim_period[0]]
-            dat         = np.array(dat).flatten()
-            setattr(self, "init_{}".format(var), dat[~np.isnan(dat)])
+            try:
+                # print(self.indir + getattr(settings, var))
+                dat = readMap(self.indir + getattr(settings, "init_{}".format(var)), flat=True)
+                setattr(self, "init_{}".format(var), dat)
+            except:
+                fileLoc     = self.indir + getattr(settings, "init_{}".format(var))
+                dat         = readNetCDF(fileLoc).loc[self.sim_period[0]]
+                dat         = np.array(dat).flatten()
+                setattr(self, "init_{}".format(var), dat[~np.isnan(dat)])
 
     # =========================================================================
     # Parameters

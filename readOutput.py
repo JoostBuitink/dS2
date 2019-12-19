@@ -19,8 +19,8 @@ def memmap_to_nc(self, var):
     # List all files corresponding to the required pattern
     files = glob.glob("{}/{}*.dat".format(self.outdir, var))
 
-    # Sort the files by index
-    first_index = [int(f.split("_")[1]) for f in files]
+    # Sort the files by 
+    first_index = [int(f.split('\\')[-1].split("_")[1]) for f in files]
     files = [x for _,x in sorted(zip(first_index,files))]
 
     # Create empty matrix with the correct shape and datatype
@@ -28,11 +28,11 @@ def memmap_to_nc(self, var):
 
     # Offset in starting point if the start of sim period did not match the
     # start of the data period
-    offset = int(files[0].split("_")[1])
+    offset = int(files[0].split('\\')[-1].split("_")[1])
 
     # Loop through all files and import information into memory
     for file in files:
-        info  = file.split("_")
+        info  = file.split('\\')[-1].split("_")
         start = int(info[1]) - offset
         stop   = int(info[2].replace(".dat","")) - offset
         shape = (stop-start, self.shape[1])
