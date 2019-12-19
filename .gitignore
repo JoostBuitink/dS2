@@ -1,1 +1,5 @@
 *.pyc
+example_application/tmp_out/Sstore.nc
+example_application/tmp_out/Qsim.nc
+example_application/noGH_dS2_settings_beforeSlice.py
+example_application/noGH_run_model_and_slice_input.py
