@@ -295,18 +295,18 @@ class dS2:
 
             # Rout the chunk of discharge data
             Qtmp = fR.multiOutlet_routing(self, data, main_ID, trackwater)
-
-            if trackwater:
-                # Add values to the complete Qorigin dataframe
-                self.Qorigin[start:start+len(self.Qorigin_tmp)] += \
-                    self.Qorigin_tmp[:min(self.tsteps, start+len(self.Qorigin_tmp))].values
-                del self.Qorigin_tmp
             
             # Write temporary values to the total dictionary
             for outlet in Qtmp:
                 # Slice the trailing zeroes, to prevent replacing errors
                 val = np.trim_zeros(Qtmp[str(outlet)], trim="b")
                 self.Qrout[str(outlet)][start:start+len(val)] += val
+                
+            # Add values to the complete Qorigin dataframe and remove the temporary file
+            if trackwater:
+                self.Qorigin[start:start+len(self.Qorigin_tmp)] += \
+                    self.Qorigin_tmp[:min(self.tsteps, start+len(self.Qorigin_tmp))].values
+                del self.Qorigin_tmp
 
             # Close and delete the memmap file
             del data

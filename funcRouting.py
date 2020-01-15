@@ -1,6 +1,16 @@
 import numpy as np
+import pandas as pd
 
-def subcatch_to_outlet(Qsim, dist1D, outletLoc, catchLoc, t_lag):
+def apply_moving_window(window, values):
+    diffused = pd.Series(values).rolling(window = window, center = True).mean()
+    diffused = np.array(diffused)
+    # Replace values where the window is not fully filled with values
+    diffused[np.isnan(diffused)] = values[np.isnan(diffused)]
+    # Correct start and tail to the original values (zero means no influence from routing)
+    diffused[values == 0] = 0
+    return diffused
+
+def subcatch_to_outlet(self, Qsim, dist1D, outletLoc, catchLoc, t_lag):
     """
     Returns a dictionary with the runoff generated in each subbasin, routed to
     the outlet of the corresponding outlet. The outletIDs are used as keys.
@@ -76,7 +86,12 @@ def subcatch_to_outlet(Qsim, dist1D, outletLoc, catchLoc, t_lag):
             # Extract simulated values and the corresponding timelag
             values = Qsim[:,ind]
             tmplag = max(int(dist1D[ind] * t_lag) - baseline_dist, 0)
-
+            
+            if self.diffusion:
+                # Apply moving average
+                window = int(tmplag * self.lag_to_window)
+                values = apply_moving_window(window=window, values=values)
+                
             # Shift the simulated discharge with a timelag
             Qrout[str(outlet)][int(tmplag):int(tmplag)+len(values)] += values
 
@@ -206,18 +221,17 @@ def multiOutlet_routing(self, Qsim, main_ID=1.0, trackwater=False):
     See the individual functions for examples
     """
 
-    Qrouted = subcatch_to_outlet(Qsim=Qsim,
+    Qrouted = subcatch_to_outlet(self, Qsim=Qsim,
                                  dist1D=self.dist1D,
                                  outletLoc=self.outletLoc,
                                  catchLoc=self.catchLoc,
                                  t_lag=self.tau)
-
+        
     Qmulti = through_allOutlets(self, outletINFO=self.outletInfo,
                                 Qrouted=Qrouted,
                                 catchLoc=self.catchLoc,
                                 t_lag=self.tau,
                                 main_ID=main_ID,
                                 trackwater=trackwater)
-
-
+    
     return Qmulti
