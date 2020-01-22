@@ -2,24 +2,23 @@ import numpy as np
 import pandas as pd
 
 def with_diffusion(self, Qsim, main_ID=1.0, trackwater=False):
-    
+
     # Extract all outlet values from dictionary
     allOutlets = list(map(float, self.outletLoc.keys()))
     # Create empty dictionary to store data in
     datalength = sum([int(item[1]*self.tau) for item in self.outletInfo.values()])
-    # Qtotal = {x: np.insert(np.repeat(0.,datalength), 0, Qrouted[x]) for x in Qrouted}
     Qtotal = {str(x): np.repeat(0., len(Qsim) + datalength) for x in allOutlets}
 
     # Loop through all outlets
     for outlet in allOutlets:
         # Convert to string
         outlet = str(outlet)
-        
+
         # Find the index of the outlet
         outlet_ind = self.outletLoc[outlet]
         # Find the distance corresponding to this outlet
         outlet_dist = self.dist1D[outlet_ind]
-        
+
         # Loop through all indices related to that outlet
         for ind in self.catchLoc[outlet]:
             ind = ind[0]
@@ -30,20 +29,18 @@ def with_diffusion(self, Qsim, main_ID=1.0, trackwater=False):
             pixel_to_outlet = self.dist1D[ind] - outlet_dist
             #TODO: Fix errors where the timelag is less than the pixels (wrong input data)
             time_lag = max(0, int(pixel_to_outlet * self.tau))
-            
-            if self.diffusion:
-                # Apply moving average
-                window = int(time_lag * self.lag_to_window)
-                values = apply_moving_window(window=window, values=orig_values)
-            else:
-                values = orig_values.copy()
-                
+
+            # Apply moving average
+            window = int(time_lag * self.lag_to_window)
+            values = apply_moving_window(window=window, values=orig_values)
+
             # Shift the simulated discharge with a timelag
+            # print("Timelag {}; offset {}; len(values) {}".format(time_lag,offset,len(values)))
             Qtotal[outlet][time_lag:time_lag+len(values)] += values
-            
+
             # To other downstream outlets
             if outlet != str(main_ID):
-                
+
                 dwnID = self.outletInfo[outlet][0]
                 # Continue adding discharge to downstream outlets until main outlet is reached
                 while dwnID != "nan":
@@ -51,19 +48,16 @@ def with_diffusion(self, Qsim, main_ID=1.0, trackwater=False):
                     down_ind = self.outletLoc[dwnID]
                     # Find the distance corresponding to this outlet
                     down_dist = self.dist1D[down_ind]
-                    
+
                     # Calculate distance from pixel to outlet, and determine time lag
                     tmp_pixel_to_outlet = self.dist1D[ind] - down_dist
                     pixel_to_outlet = tmp_pixel_to_outlet
                     delay = int(pixel_to_outlet * self.tau)
-                    
-                    if self.diffusion:
-                        # Apply moving average
-                        window = int(delay * self.lag_to_window)
-                        values = apply_moving_window(window=window, values = orig_values)
-                    else:
-                        values = orig_values.copy()
-                    
+
+                    # Apply moving average
+                    window = int(delay * self.lag_to_window)
+                    values = apply_moving_window(window=window, values = orig_values)
+
                     # Add values to the time series of the downstream outlet
                     Qtotal[dwnID][delay:delay+len(values)] += values
                     # Update to next downstream outlet
@@ -77,8 +71,8 @@ def moving_average(values, window):
     return ret[window - 1:] / window
 
 def apply_moving_window(values, window):
-    # Prevent errors
-    res = np.array(values)
+    # Set zeroes, so only places where the window covers enough data gets values
+    res = np.zeros(values.shape)
     if window > 3:
         ret = moving_average(values=values, window=window)
         # Find the correct indices to place the values in (the middle)
@@ -89,14 +83,14 @@ def apply_moving_window(values, window):
         res[values == 0] = 0
     # No need to define end, only causes errors
     elif window == 2:
-        ret = moving_average(values=values, window=window)        
+        ret = moving_average(values=values, window=window)
         # Copy original values, and replace with the averaged values
         res[1:] = ret
         res[values == 0] = 0
     # If window is only 1, just copy the values
     else:
         res = values
-    
+
     return res
 
 def subcatch_to_outlet(self, Qsim, dist1D, outletLoc, catchLoc, t_lag):
@@ -175,7 +169,7 @@ def subcatch_to_outlet(self, Qsim, dist1D, outletLoc, catchLoc, t_lag):
             # Extract simulated values and the corresponding timelag
             values = Qsim[:,ind]
             tmplag = max(int(dist1D[ind] * t_lag) - baseline_dist, 0)
-                
+
             # Shift the simulated discharge with a timelag
             Qrout[str(outlet)][int(tmplag):int(tmplag)+len(values)] += values
 
@@ -257,10 +251,10 @@ def through_allOutlets(self, outletINFO, Qrouted, catchLoc, t_lag, main_ID=1.0, 
             while dwnID != "nan":
                 # Add the flow of the outletID to the downstream outlet
                 Qtotal[dwnID][delay:delay+len(values)] += values
-                
+
                 if dwnID == str(main_ID) and trackwater:
                     self.Qorigin_tmp[outletID][delay:delay+len(values)] = values
-                    
+
                 # Keep track of how many times this addition has taken place
                 count[dwnID] += len(catchLoc[outletID])
                 # Get the delay to the downstream outlet and set the downstreamID
@@ -274,7 +268,7 @@ def through_allOutlets(self, outletINFO, Qrouted, catchLoc, t_lag, main_ID=1.0, 
                 self.Qorigin_tmp[outletID][delay:delay+len(values)] = values
 
     Qtotal = {x: Qtotal[x]/count[x] for x in Qtotal}
-    
+
     return Qtotal
 
 def multiOutlet_routing(self, Qsim, main_ID=1.0, trackwater=False):
@@ -310,12 +304,12 @@ def multiOutlet_routing(self, Qsim, main_ID=1.0, trackwater=False):
                                  outletLoc=self.outletLoc,
                                  catchLoc=self.catchLoc,
                                  t_lag=self.tau)
-        
+
     Qmulti = through_allOutlets(self, outletINFO=self.outletInfo,
                                 Qrouted=Qrouted,
                                 catchLoc=self.catchLoc,
                                 t_lag=self.tau,
                                 main_ID=main_ID,
                                 trackwater=trackwater)
-    
+
     return Qmulti
