@@ -251,7 +251,7 @@ class dS2:
                     os.remove(f)
 
 
-    def routing_with_diffusion(self, main_ID=1.0, delete=True):
+    def routing_with_diffusion(self, main_ID=1.0, delete=True, trackwater=False):
         print(">>> Routing with diffusion...")
 
         # Create a list of all outlets
@@ -261,6 +261,14 @@ class dS2:
         for outlet in allOutlets:
             self.Qrout[str(outlet)] = np.repeat(0., self.shape[0] +
                                       int(np.nanmax(self.dist1D) * self.tau))
+
+        if trackwater:
+            # Create empty dataframe to store the routed water per timestep per basin in
+            # self.Qorigin = pd.DataFrame(0, columns=range(self.shape[1]),
+            #                                index=np.repeat(0., self.shape[0]))
+            self.Qorigin = pd.DataFrame(0, columns=np.array(allOutlets).astype(str),
+                                           index=range(self.shape[0]+int(np.nanmax(self.dist1D) * self.tau)))
+            # self.track_count = self.Qorigin.copy()
 
         # Count number of pixels contributing to each basin
         count = {str(x): len(self.catchLoc[str(x)]) for x in allOutlets}
@@ -274,12 +282,12 @@ class dS2:
         max_wid = int(np.max(self.dist1D) * self.tau * self.lag_to_window)
         max_lag = int(np.max(self.dist1D) * self.tau)
         max_window =  max_lag + max_wid
-                      
+
         if max_lag < max_wid//2:
             slice_offset = max_wid//2 - max_lag
         else:
             slice_offset = 0
-                             
+
         # Find the filenames of the memmap files and sort
         files = glob.glob("{}/{}*.dat".format(self.outdir, "Qsim"))
         first_index = [int(f.split('\\')[-1].split("_")[1]) for f in files]
@@ -298,13 +306,23 @@ class dS2:
             # Read the memmap data
             data = np.memmap(file, dtype=self.dtype, mode="r", shape = shape)
 
+            if trackwater:
+                # Create temporary dataframe, used in mutliOutlet_routing()
+                self.Qorigin_tmp = pd.DataFrame(0,
+                    columns=np.array(allOutlets).astype(str),
+                    index=range(shape[0] + int(np.nanmax(self.dist1D) * self.tau * 3)))
+                # self.track_count_tmp = self.Qorigin_tmp.copy()
+                # self.Qorigin_tmp = pd.DataFrame(0, columns=range(self.shape[1]),
+                #                            index=range(len(np.repeat(0., shape[0] +
+                #                         int(np.nanmax(self.dist1D) * self.tau * 2)))))
+
             if file == files[0]:
                 # Rout the chunk of discharge data
-                Qtmp = fR.with_diffusion(self, Qsim = data, main_ID=1.0, trackwater=False)
+                Qtmp = fR.with_diffusion(self, Qsim = data, main_ID=1.0, trackwater=trackwater)
                 last = np.array(data)[-max_window:]
             else:
                 data = np.insert(data, 0, last, axis=0)
-                Qtmp = fR.with_diffusion(self, Qsim = data, main_ID=1.0, trackwater=False)
+                Qtmp = fR.with_diffusion(self, Qsim = data, main_ID=1.0, trackwater=trackwater)
                 last = np.array(data)[-max_window:]
 
             # Write temporary values to the total dictionary
@@ -316,20 +334,48 @@ class dS2:
                     val = val[max_window-slice_offset:]
                     val = val[:self.chunk_size]
                     self.Qrout[outlet][copy_end[outlet]-slice_offset:copy_end[outlet]-slice_offset + len(val)] = val/count[outlet]
+
+                    if trackwater:
+                        tmp_val = np.trim_zeros(self.Qorigin_tmp.loc[:, outlet].values, trim="b")
+                        tmp_val = tmp_val[max_window-slice_offset:]
+                        tmp_val = tmp_val[:self.chunk_size-1]
+                        self.Qorigin.loc[copy_end[outlet]-slice_offset:copy_end[outlet]-slice_offset+len(tmp_val)-1,outlet] = tmp_val
+
                     copy_end[outlet] = copy_end[outlet] + len(val)
                 else:
+
+                    if trackwater:
+                        # tmp_val = self.Qorigin_tmp.loc[:self.chunk_size-1,outlet]
+                        tmp_val = np.trim_zeros(self.Qorigin_tmp.loc[:,outlet], trim="b")
+                        tmp_val = tmp_val[:self.chunk_size]
+                        self.Qorigin.loc[:len(tmp_val)-1, outlet] = tmp_val
+
                     val = val[:self.chunk_size]
                     self.Qrout[outlet][:len(val)] = val/count[outlet]
                     copy_end[outlet] = len(val)
-            
+            # # Add values to the complete Qorigin dataframe and remove the temporary file
+            # if trackwater:
+            #     # self.Qorigin[start:start+len(self.Qorigin_tmp)] += \
+            #     self.Qorigin.iloc[start:start + len(self.Qorigin_tmp)] += \
+            #         self.Qorigin_tmp.iloc[:self.tsteps - start].values
+            #         # self.Qorigin_tmp.iloc[:min(self.tsteps, start+len(self.Qorigin_tmp))].values
+
+            #     self.track_count.iloc[start:start + len(self.Qorigin_tmp)] += \
+            #         self.track_count_tmp.iloc[:self.tsteps - start].values
+            #         # self.track_count_tmp.iloc[:min(self.tsteps, start+len(self.track_count_tmp))].values
+            #     # del self.Qorigin_tmp, self.track_count_tmp
+
             # Close and delete the memmap file
-            del data
+            del data#TODO, self.Qorigin_tmp
             if delete:
                 os.remove(file)
 
         # Correct the dictionary to the total simulation length
         for key in self.Qrout.keys():
             self.Qrout[key] = self.Qrout[key][:self.tsteps]
+
+        if trackwater:
+            self.Qorigin = self.Qorigin[:self.tsteps] / self.shape[1]
 
     def routing(self, main_ID=1.0, delete=True, trackwater=False):
         '''Transports water from each pixel to the outlet(s), applying a time

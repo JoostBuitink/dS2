@@ -25,7 +25,6 @@ def with_diffusion(self, Qsim, main_ID=1.0, trackwater=False):
             # Extract simulated values and the corresponding timelag
             orig_values = Qsim[:,ind]
             # tmplag = max(int(self.dist1D[ind] * self.tau) - baseline_dist, 0)
-            # print(outlet, self.dist1D[ind], outlet_dist)
             pixel_to_outlet = self.dist1D[ind] - outlet_dist
             #TODO: Fix errors where the timelag is less than the pixels (wrong input data)
             time_lag = max(0, int(pixel_to_outlet * self.tau))
@@ -35,7 +34,6 @@ def with_diffusion(self, Qsim, main_ID=1.0, trackwater=False):
             values = apply_moving_window(window=window, values=orig_values)
 
             # Shift the simulated discharge with a timelag
-            # print("Timelag {}; offset {}; len(values) {}".format(time_lag,offset,len(values)))
             Qtotal[outlet][time_lag:time_lag+len(values)] += values
 
             # To other downstream outlets
@@ -60,8 +58,16 @@ def with_diffusion(self, Qsim, main_ID=1.0, trackwater=False):
 
                     # Add values to the time series of the downstream outlet
                     Qtotal[dwnID][delay:delay+len(values)] += values
+
+                    # Tracking of water
+                    if dwnID == str(main_ID) and trackwater:
+                        self.Qorigin_tmp.loc[delay:delay+len(values)-1, outlet] += values
+
                     # Update to next downstream outlet
                     dwnID = self.outletInfo[dwnID][0]
+            else:
+                if trackwater:
+                    self.Qorigin_tmp.loc[time_lag:time_lag+len(values)-1, outlet] += values
 
     return Qtotal
 
