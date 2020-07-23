@@ -91,8 +91,11 @@ class dS2:
         #======================================================================
         # Remove all contents in output directory
         #======================================================================
-        for file_name in os.listdir(self.outdir):
-            os.remove("{}/{}".format(self.outdir, file_name))
+        try:
+            for file_name in os.listdir(self.outdir):
+                os.remove("{}/{}".format(self.outdir, file_name))
+        except FileNotFoundError:
+            os.mkdir(self.outdir)
 
         #======================================================================
         # Find forcing index corresponding to starting date
