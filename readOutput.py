@@ -19,7 +19,7 @@ def memmap_to_nc(self, var):
     # List all files corresponding to the required pattern
     files = glob.glob("{}/{}*.dat".format(self.outdir, var))
 
-    # Sort the files by 
+    # Sort the files by
     first_index = [int(f.split('\\')[-1].split("_")[1]) for f in files]
     files = [x for _,x in sorted(zip(first_index,files))]
 
@@ -51,9 +51,12 @@ def memmap_to_nc(self, var):
         allData[i][~np.isnan(self.catchment)] = c_data[i]
     # Transform 3D array into a dataset with correct dimensions
     # TODO: Fix the x and y positioning of the NetCDF files (now the indices are used)
-    ncData = xr.Dataset({"val": (["time", "x", "y"],  allData)},
+    ncData = xr.Dataset({"val": (["time", "y", "x"],  allData)},
                         coords = {"time": self.sim_period,
-                                  "x" : range(self.catchment.shape[0]),
-                                  "y" : range(self.catchment.shape[1])})
+                                  "x" : range(self.catchment.shape[1]),
+                                  "y" : range(self.catchment.shape[0])})
     # Write to NetCDF file
-    ncData.to_netcdf("{}/{}.nc".format(self.outdir, var))
+
+    comp = dict(zlib=True, complevel=7)
+    encoding = {var: comp for var in ncData.data_vars}
+    ncData.to_netcdf("{}/{}.nc".format(self.outdir, var), encoding=encoding)

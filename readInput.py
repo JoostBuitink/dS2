@@ -7,7 +7,10 @@ import pickle, os
 def readMap(fileName, flat = False):
     """ Read 2D map, stored as an ASCII file, without any headers. Set flat to
     True if a flat array is required."""
-    data = np.loadtxt(fileName, skiprows = 0)
+    try:
+        data = np.loadtxt(fileName, skiprows = 0)
+    except:
+        data = np.loadtxt(fileName, skiprows = 6)
 
     if flat == True:
         data = data.flatten()

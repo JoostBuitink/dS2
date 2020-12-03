@@ -45,7 +45,7 @@ def evaporation_reduction(QwithET, Q_init, P, alpha, beta, gamma, Q_threshold, L
     # only perform evaporation reduction if the discharge threshold is crossed
     if Qmin < Q_threshold:
         # find the indices where the reduction needs to occur
-        idx = np.where(QwithET <= Q_threshold)
+        idx = np.where(QwithET <= Q_threshold)[0]
         # extract the correct initial discharge and precipitation values
         Q_slice = Q_init[idx]
         precip_slice = P[idx]
