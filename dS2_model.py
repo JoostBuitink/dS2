@@ -48,8 +48,15 @@ class dS2:
                 Rs = 0
             self.Prain_CHUNK = np.where(T > self.T0, self.P, 0)
             self.Psnow_CHUNK = np.where(T <= self.T0, self.P, 0)
+
+            # Reshape parameter
+            if type(self.ddf) == np.ndarray:
+                ddf = np.tile(self.ddf, len(T)).reshape(T.shape)
+            else:
+                ddf = self.ddf
+
             self.Smelt_POT = fF.snowmelt_potential(T = T, Rg = Rs, T0 = self.T0,
-                                              ddf = self.ddf, fact = self.rdf)
+                                              ddf = ddf, fact = self.rdf)
         else:
             self.Prain_CHUNK = self.P
             self.Psnow_CHUNK = np.zeros(self.P.shape, dtype=self.dtype)
