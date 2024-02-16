@@ -78,6 +78,13 @@ max_extra_dt      | Stability - Number of maximum extra dt per dt          | 50 
 
 # References
 
-Kirchner, J. W. (2009). Catchments as simple dynamical systems: Catchment 
-characterization, rainfall‐runoff modeling, and doing hydrology backward. 
-Water Resources Research, 45(2).
+Buitink, J., Melsen, L. A., Kirchner, J. W., and Teuling, A. J. (2020), A 
+distributed simple dynamical systems approach (dS2 v1.0) for 
+computationally efficient hydrological modelling at high spatio-temporal 
+resolution, Geoscientific Model Development, 13, 6093–6110, 
+https://doi.org/10.5194/gmd-13-6093-2020.
+
+
+Kirchner, J. W. (2009), Catchments as simple dynamical systems: Catchment 
+characterization, rainfall-runoff modeling, and doing hydrology backward, 
+Water Resources Research, 45, W02429, https://doi.org/10.1029/2008WR006912.
